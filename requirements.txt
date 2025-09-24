@@ -1,0 +1,12 @@
+# Backend
+fastapi==0.111.1           # FastAPI backend framework
+uvicorn==0.23.2            # ASGI server for FastAPI
+supabase==1.0.2            # Supabase Python client
+bcrypt==4.1.0              # Password hashing for user passwords
+qrcode==7.4.2              # QR code generation
+python-dotenv==1.0.0       # Load environment variables (.env file)
+requests==2.31.0           # HTTP requests to backend or Supabase (optional)
+
+# Frontend
+streamlit==1.29.0          # Frontend framework in Python
+Pillow==10.0.0             # Required for QR code image handling
