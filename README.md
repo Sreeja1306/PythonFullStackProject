@@ -46,7 +46,7 @@ git clone <repository-url>
 
 ### 2. Install Dependencies
 
-# Install all require dpython packages 
+# Install all required python packages 
 pip install -r requirements.txt
 
 ### 3. Set Up supabse Database
