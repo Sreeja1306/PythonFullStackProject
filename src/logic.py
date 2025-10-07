@@ -1,75 +1,66 @@
-# logic.py
-from db import (
-    create_user, get_all_users, update_user, delete_user,
-    create_note, get_all_notes, get_notes_by_user, update_note, delete_note
-)
+from datetime import datetime
+import bcrypt
+from src import db
 
-#---------------- Users Manager ----------------
 class UserManager:
-    """
-    Acts as a bridge b.w frontend (Streamlit/FastAPI) and the database.
-    """
-    #----- Create -----
-    def add_user(self, user_name, password_hash, email, created_at=None):
-        if not user_name or not password_hash:
-            return {"Success": False, "Message": "user_name and password_hash are required"}
+    def add_user(self, user_name, password_hash, email):
+        created_at = str(datetime.utcnow())
+        user, error = db.add_user_db(user_name, email, password_hash, created_at)
+        if error:
+            return {"Success": False, "Message": error}
+        return {"Success": True, "data": {"Id": user[0], "User_Name": user[1], "email": user[2]}}
 
-        result = create_user(user_name, password_hash, email, created_at)
-        if result.get("data"):
-            return {"Success": True, "Message": "User added Successfully!"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
+    def login_user(self, email, password):
+        user = db.get_user_by_email_db(email)
+        if not user:
+            return {"Success": False, "Message": "User not found"}
+        stored_hash = user[3]
+        if bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8")):
+            return {"Success": True, "user_id": user[0], "user_name": user[1]}
+        return {"Success": False, "Message": "Invalid credentials"}
 
-    #----- Read -----
     def get_users(self):
-        return get_all_users()
+        users = db.get_all_users_db()
+        return [{"Id": u[0], "User_Name": u[1], "email": u[2]} for u in users]
 
-    #----- Update -----
-    def update_user(self, user_id, new_name):
-        result = update_user(user_id, new_name)
-        if result.get("data"):
-            return {"Success": True, "Message": "User updated successfully"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
-
-    #----- Delete -----
-    def delete_user(self, user_id):
-        result = delete_user(user_id)
-        if result.get("data"):
-            return {"Success": True, "Message": "User deleted successfully"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
-
-
-#---------------- Notes Manager ----------------
 class NoteManager:
-    """
-    Acts as a bridge b.w frontend (Streamlit/FastAPI) and the database for Notes.
-    """
-    #----- Create -----
-    def add_note(self, content, qr_code_data, user_id, created_at=None):
-        if not content or not user_id:
-            return {"Success": False, "Message": "content and user_id are required"}
-
-        result = create_note(content, qr_code_data, user_id, created_at)
-        if result.get("data"):
-            return {"Success": True, "Message": "Note added successfully!"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
-
-    #----- Read -----
-    def get_notes(self):
-        return get_all_notes()
+    def add_note(self, content, qr_code_data, user_id, subject, created_at=None, file_name=None, file_data=None):
+        if not created_at:
+            created_at = str(datetime.utcnow())
+        note, error = db.add_note_db(content, qr_code_data, user_id, subject, created_at, file_name, file_data)
+        if error:
+            return {"Success": False, "Message": error}
+        return {"Success": True, "data": {"Id": note[0], "content": note[1], "qr_code_data": note[2], 
+                                          "user_id": note[3], "subject": note[4], "created_at": note[5],
+                                          "file_name": note[6] is not None and str(note[6]) or None}}
 
     def get_notes_by_user(self, user_id):
-        return get_notes_by_user(user_id)
+        notes = db.get_notes_by_user_db(user_id)
+        return [{"Id": n[0], "content": n[1], "qr_code_data": n[2], "user_id": n[3], 
+                 "subject": n[4], "created_at": n[5], "file_name": n[6] if len(n) > 6 else None} for n in notes]
 
-    #----- Update -----
+    def get_note_by_id(self, note_id):
+        note = db.get_note_by_id_db(note_id)
+        if not note:
+            return None
+        return {"Id": note[0], "content": note[1], "qr_code_data": note[2], 
+                "user_id": note[3], "subject": note[4], "created_at": note[5],
+                "file_name": note[6] if len(note) > 6 else None}
+
     def update_note(self, note_id, new_content):
-        result = update_note(note_id, new_content)
-        if result.get("data"):
-            return {"Success": True, "Message": "Note updated successfully"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
+        note, error = db.update_note_db(note_id, new_content)
+        if error:
+            return {"Success": False, "Message": error}
+        return {"Success": True, "data": {"Id": note[0], "content": note[1]}}
 
-    #----- Delete -----
+    def update_qr_data(self, note_id, qr_code_data):
+        note, error = db.update_note_qr_db(note_id, qr_code_data)
+        if error:
+            return {"Success": False, "Message": error}
+        return {"Success": True, "data": {"Id": note[0], "qr_code_data": note[2]}}
+
     def delete_note(self, note_id):
-        result = delete_note(note_id)
-        if result.get("data"):
-            return {"Success": True, "Message": "Note deleted successfully"}
-        return {"Success": False, "Message": f"Error: {result.get('error')}"}
+        note, error = db.delete_note_db(note_id)
+        if error:
+            return {"Success": False, "Message": error}
+        return {"Success": True, "data": {"Id": note[0], "content": note[1]}}

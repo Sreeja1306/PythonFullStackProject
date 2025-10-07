@@ -1,61 +1,99 @@
-# db.py
-import os
-from supabase import create_client
-from dotenv import load_dotenv
+import sqlite3
 
-# Load environment variables
-load_dotenv()
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
+# --- Persistent database ---
+conn = sqlite3.connect("studyqr.db", check_same_thread=False)
+cursor = conn.cursor()
 
-if not url or not key:
-    raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in environment")
+# --- Users table ---
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    User_Name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+)
+""")
 
-supabase = create_client(url, key)
+# --- Notes table ---
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS notes (
+    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    qr_code_data TEXT,
+    user_id INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    file_name TEXT,
+    file_data BLOB,
+    FOREIGN KEY(user_id) REFERENCES users(Id)
+)
+""")
+conn.commit()
 
-#--------- Users table Operations ---------
-def create_user(user_name, password_hash, email, created_at=None):
-    if created_at is None:
-        from datetime import datetime
-        created_at = datetime.utcnow().isoformat()
+# --- User operations ---
+def add_user_db(user_name, email, password_hash, created_at):
+    try:
+        cursor.execute(
+            "INSERT INTO users (User_Name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+            (user_name, email, password_hash, created_at)
+        )
+        conn.commit()
+        cursor.execute("SELECT * FROM users WHERE email=?", (email,))
+        return cursor.fetchone(), None
+    except Exception as e:
+        return None, str(e)
 
-    return supabase.table("Users").insert({
-        "User_Name": user_name,
-        "password_hash": password_hash,
-        "email": email,
-        "created_at": created_at
-    }).execute()
+def get_user_by_email_db(email):
+    cursor.execute("SELECT * FROM users WHERE email=?", (email,))
+    return cursor.fetchone()
 
-def get_all_users():
-    return supabase.table("Users").select("*").order("created_at").execute()
+def get_all_users_db():
+    cursor.execute("SELECT * FROM users")
+    return cursor.fetchall()
 
-def update_user(user_id, user_name):
-    return supabase.table("Users").update({"User_Name": user_name}).eq("id", user_id).execute()
+# --- Note operations ---
+def add_note_db(content, qr_code_data, user_id, subject, created_at, file_name=None, file_data=None):
+    try:
+        cursor.execute(
+            "INSERT INTO notes (content, qr_code_data, user_id, subject, created_at, file_name, file_data) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (content, qr_code_data, user_id, subject, created_at, file_name, file_data)
+        )
+        conn.commit()
+        cursor.execute("SELECT * FROM notes WHERE Id = last_insert_rowid()")
+        return cursor.fetchone(), None
+    except Exception as e:
+        return None, str(e)
 
-def delete_user(user_id):
-    return supabase.table("Users").delete().eq("id", user_id).execute()
+def get_notes_by_user_db(user_id):
+    cursor.execute("SELECT * FROM notes WHERE user_id=?", (user_id,))
+    return cursor.fetchall()
 
-#--------- Notes table Operations ---------
-def create_note(content, qr_code_data, user_id, created_at=None):
-    if created_at is None:
-        from datetime import datetime
-        created_at = datetime.utcnow().isoformat()
+def get_note_by_id_db(note_id):
+    cursor.execute("SELECT * FROM notes WHERE Id=?", (note_id,))
+    return cursor.fetchone()
 
-    return supabase.table("Notes").insert({
-        "content": content,
-        "qr_code_data": qr_code_data,
-        "user_id": user_id,
-        "created_at": created_at
-    }).execute()
+def update_note_db(note_id, new_content):
+    try:
+        cursor.execute("UPDATE notes SET content=? WHERE Id=?", (new_content, note_id))
+        conn.commit()
+        return get_note_by_id_db(note_id), None
+    except Exception as e:
+        return None, str(e)
 
-def get_all_notes():
-    return supabase.table("Notes").select("*").order("created_at").execute()
+def update_note_qr_db(note_id, qr_code_data):
+    try:
+        cursor.execute("UPDATE notes SET qr_code_data=? WHERE Id=?", (qr_code_data, note_id))
+        conn.commit()
+        return get_note_by_id_db(note_id), None
+    except Exception as e:
+        return None, str(e)
 
-def get_notes_by_user(user_id):
-    return supabase.table("Notes").select("*").eq("user_id", user_id).order("created_at").execute()
-
-def update_note(note_id, content):
-    return supabase.table("Notes").update({"content": content}).eq("id", note_id).execute()
-
-def delete_note(note_id):
-    return supabase.table("Notes").delete().eq("id", note_id).execute()
+def delete_note_db(note_id):
+    try:
+        note = get_note_by_id_db(note_id)
+        cursor.execute("DELETE FROM notes WHERE Id=?", (note_id,))
+        conn.commit()
+        return note, None
+    except Exception as e:
+        return None, str(e)
